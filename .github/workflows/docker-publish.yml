@@ -33,27 +33,14 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Get version and version code
-      uses: xom9ikk/version-by-tag@v1
-      id: version_by_tag
-      with:
-        path: ./
-        isUseGithubRunNumber: false 
-    
-    - name: Docker meta
+
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+    - name: Extract Docker metadata
       id: meta
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v4
       with:
-        images: ${{ env.REGISTRY }}/${{ github.repository }}
-        tags: |
-          type=semver,pattern={{raw}}
-          type=ref,event=branch
-          type=raw,value=${{ steps.version_by_tag.outputs.semver }}
-          type=raw,value=${{ steps.version_by_tag.outputs.tag }}
-          type=sha
-        flavor: |
-          latest=true
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         
     - name: Build and push
       uses: docker/build-push-action@v5
