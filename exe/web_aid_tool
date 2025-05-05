@@ -12,7 +12,7 @@ port = 4567
 options = OptionParser.new do |opts|
   opts.banner = "Usage: web_aid_tool /path/to/serial/port [options]"
 
-  opts.on("--port PORT", "Which port to listen on (default 4567)", :integer) { |v| port = v }
+  opts.on("--port PORT", "Which port to listen on (default 4567)", Integer) { |v| port = v }
   opts.on("--debug-modbus", "Print actual protocol bytes") { debug_modbus = true }
   opts.on("--monitor", "Print interpreted registers as they are requested, like aurora_monitor") { monitor = true }
   opts.on("--ignore-missing-registers",

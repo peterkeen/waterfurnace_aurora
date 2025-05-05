@@ -2,8 +2,7 @@
 # frozen_string_literal: true
 
 require "aurora"
-require "homie-mqtt"
-require "mqtt/home_assistant"
+require "mqtt/homie/home_assistant"
 require "ccutrer-serialport"
 require "uri"
 require "optparse"
@@ -19,7 +18,7 @@ options = OptionParser.new do |opts|
 
   opts.on("--device-name DEVICENAME", "Give a descriptive name to your device") { |v| device_name = v }
   opts.on("--debug-modbus", "Print actual protocol bytes") { debug_modbus = true }
-  opts.on("--web-aid-tool PORT", "Run web aid tool on given port", :integer) { |v| web_aid_tool = v }
+  opts.on("--web-aid-tool PORT", "Run web aid tool on given port", Integer) { |v| web_aid_tool = v }
   opts.on("-v", "--version", "Print version") do
     puts Aurora::VERSION
     exit
@@ -70,7 +69,8 @@ class MQTTBridge
           registers = @abc.modbus_slave.read_multiple_holding_registers(*queries)
           result = registers.values.join(",")
           @homie.mqtt.publish("#{@homie.topic}/$modbus/getregs/response",
-                              "#{query_id}:#{result}", qos: 1)
+                              "#{query_id}:#{result}",
+                              qos: 1)
         when %r{\$modbus/(\d+)/set$}
           register = $1.to_i
           value = case value
@@ -150,7 +150,7 @@ class MQTTBridge
                     :enum,
                     @abc.current_mode,
                     format: allowed_modes,
-                    hass: { sensor: { state_class: :measurement } })
+                    hass: :sensor)
       node.property("emergency-shutdown",
                     "Emergency Shutdown Requested",
                     :boolean,
@@ -497,7 +497,7 @@ class MQTTBridge
                       @abc.blower.public_send(field),
                       format: 1..12,
                       hass: { number: { entity_category: :config } }) do |value|
-          @mutex.synchronize { @abc.blower.public_send("#{field}=", value) }
+          @mutex.synchronize { @abc.blower.public_send(:"#{field}=", value) }
         end
       end
 
@@ -583,8 +583,7 @@ class MQTTBridge
         node.property("enabled",
                       "Enabled",
                       :boolean,
-                      @abc.dhw.enabled,
-                      hass: { switch: { icon: "mdi:water-boiler" } }) do |value|
+                      @abc.dhw.enabled) do |value|
           @mutex.synchronize { @abc.dhw.enabled = value }
         end
         node.property("running",
@@ -597,27 +596,46 @@ class MQTTBridge
                       :float,
                       @abc.dhw.set_point,
                       format: 100..140,
-                      unit: "°F",
-                      hass: { number: { step: 5 } }) do |value|
+                      unit: "°F") do |value|
           @mutex.synchronize { @abc.dhw.set_point = value }
         end
         node.property("water-temperature",
                       "Water Temperature",
                       :float,
                       @abc.dhw.water_temperature,
-                      unit: "°F",
-                      hass: { sensor: { device_class: :temperature,
-                                        state_class: :measurement } })
+                      unit: "°F")
+        @homie.mqtt.unpublish_hass_switch("dhw_enabled", node_id: @homie.id)
+        @homie.mqtt.unpublish_hass_number("dhw_set-point", node_id: @homie.id)
+        @homie.mqtt.unpublish_hass_sensor("dhw_water-temperature", node_id: @homie.id)
+        node.hass_water_heater(current_temperature_property: "water-temperature",
+                               mode_property: "enabled",
+                               modes: %i[off heat_pump],
+                               mode_command_template: <<~JINJA,
+                                 {% if value == 'off' %}
+                                   false
+                                 {% else %}
+                                   true
+                                 {% endif %}
+                               JINJA
+                               mode_state_template: <<~JINJA,
+                                 {% if value == 'true' %}
+                                   heat_pump
+                                 {% elif value == 'false' %}
+                                   off
+                                 {% endif %}
+                               JINJA
+                               temperature_property: "set-point",
+                               icon: "mdi:water-boiler")
       end
     end
 
     if @abc.humidistat
       @humidistat = @homie.node("humidistat", "Humidistat", "Humidistat") do |node|
         if @abc.humidistat.humidifier?
-          node.property("humidifier-running",
-                        "Humidifier Running",
-                        :boolean,
-                        @abc.humidistat.humidifier_running?)
+          running = node.property("humidifier-running",
+                                  "Humidifier Running",
+                                  :boolean,
+                                  @abc.humidistat.humidifier_running?)
           if @abc.awl_communicating?
             node.property("humidifier-mode",
                           "Humidifier Mode",
@@ -635,21 +653,22 @@ class MQTTBridge
               @mutex.synchronize { @abc.humidistat.humidification_target = value }
             end
             node.hass_humidifier("humidifier-running",
-                                 target_property: "humidification-target",
+                                 target_humidity_property: "humidification-target",
                                  mode_property: "humidifier-mode",
-                                 id: "humidifier",
+                                 object_id: "humidifier",
                                  name: "Humidifier",
-                                 device_class: :humidifier)
+                                 device_class: :humidifier,
+                                 command_topic: "#{running.topic}/set")
           end
         end
 
         # VSDrive can perform active dehumidification, even without a dedicated dehumidifier
         if @abc.humidistat.dehumidifier? ||
            @abc.compressor.is_a?(Aurora::Compressor::VSDrive)
-          node.property("dehumidifier-running",
-                        "Dehumidifier Running",
-                        :boolean,
-                        @abc.humidistat.dehumidifier_running?)
+          running = node.property("dehumidifier-running",
+                                  "Dehumidifier Running",
+                                  :boolean,
+                                  @abc.humidistat.dehumidifier_running?)
           if @abc.awl_communicating?
             node.property("dehumidifier-mode",
                           "Dehumidifier Mode",
@@ -667,11 +686,12 @@ class MQTTBridge
               @mutex.synchronize { @abc.humidistat.dehumidification_target = value }
             end
             node.hass_humidifier("dehumidifier-running",
-                                 target_property: "dehumidification-target",
+                                 target_humidity_property: "dehumidification-target",
                                  mode_property: "dehumidifier-mode",
-                                 id: "dehumidifier",
+                                 object_id: "dehumidifier",
                                  name: "Dehumidifier",
-                                 device_class: :dehumidifier)
+                                 device_class: :dehumidifier,
+                                 command_topic: "#{running.topic}/set")
           end
         end
         next unless @abc.awl_communicating?
@@ -771,15 +791,13 @@ class MQTTBridge
                         :enum,
                         zone.priority,
                         format: %w[economy comfort],
-                        hass: { sensor: { state_class: :measurement,
-                                          entity_category: :diagnostic } })
+                        hass: { sensor: { entity_category: :diagnostic } })
           node.property("size",
                         "Size",
                         :enum,
                         zone.size,
                         format: %w[0 25 45 70],
-                        hass: { sensor: { state_class: :measurement,
-                                          entity_category: :diagnostic } })
+                        hass: { sensor: { entity_category: :diagnostic } })
           node.property("normalized-size",
                         "Normalized Size",
                         :integer,
@@ -805,7 +823,8 @@ class MQTTBridge
           @mutex.synchronize { zone.heating_target_temperature = value }
         end
         node.property("cooling-target-temperature",
-                      "Cooling Target Temperature", :integer,
+                      "Cooling Target Temperature",
+                      :integer,
                       zone.cooling_target_temperature,
                       unit: "°F",
                       format: 54..99) do |value|
@@ -817,17 +836,16 @@ class MQTTBridge
                           mode_property: "target-mode",
                           temperature_high_property: "cooling-target-temperature",
                           temperature_low_property: "heating-target-temperature",
-                          templates: {
-                            action_template: <<~JINJA
-                              {% if value.startswith('h') %}
-                                heating
-                              {% elif value.startswith('c') %}
-                                cooling
-                              {% elif value == 'standby' %}
-                                idle
-                              {% endif %}
-                            JINJA
-                          })
+                          action_template: <<~JINJA
+                            {% if value.startswith('h') %}
+                              heating
+                            {% elif value.startswith('c') %}
+                              cooling
+                            {% elif value == 'standby' %}
+                              idle
+                            {% endif %}
+                          JINJA
+                         )
       end
     end
 

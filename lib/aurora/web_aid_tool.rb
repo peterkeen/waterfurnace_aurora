@@ -16,6 +16,7 @@ module Aurora
 
     set :public_folder, "html"
     set :logging, false
+    set :server, "puma"
 
     get "/" do
       send_file "html/index.htm"
@@ -42,7 +43,7 @@ module Aurora
     end
 
     get "/request.cgi" do
-      params = parse_query_string(request.query_string)
+      params = URI.decode_www_form(request.query_string).to_h
       result = params.slice("cmd", "id", "set", "addr")
       result["err"] = nil
 

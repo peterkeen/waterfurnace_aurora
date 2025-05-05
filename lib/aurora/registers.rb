@@ -61,7 +61,7 @@ module Aurora
   end
 
   def to_uint32(registers, idx)
-    Aurora&.logger&.warn("Missing register #{idx + 1}") unless registers[idx + 1]
+    Aurora.logger&.warn("Missing register #{idx + 1}") unless registers[idx + 1]
     (registers[idx] << 16) + registers[idx + 1]
   end
 
@@ -479,7 +479,7 @@ module Aurora
   def zone_configuration3(value)
     size = (value >> 3) & 0x3
     result = {
-      zone_priority: ((value & 0x20) == 0x20) ? :economy : :comfort,
+      zone_priority: value.allbits?(0x20) ? :economy : :comfort,
       zone_size: ZONE_SIZES[size],
       normalized_size: value >> 8
     }
@@ -494,6 +494,7 @@ module Aurora
   REGISTER_CONVERTERS = {
     TO_HUNDREDTHS => [2, 3, 417, 418, 801, 804, 807, 813, 816, 817, 819, 820, 825, 828],
     method(:dipswitch_settings) => [4, 33],
+    # rubocop:disable Layout/MultilineArrayLineBreaks
     TO_TENTHS => [401, 419, 745, 746, 901,
                   1105, 1106, 1107, 1108, 1115, 1116, 1117, 1119,
                   3322, 3323,
@@ -504,10 +505,11 @@ module Aurora
                   21_230, 22_131,
                   21_239, 21_240,
                   21_248, 21_249],
-    TO_SIGNED_TENTHS => [19, 20, 501, 502, 567, 740, 747, 900, 903,
+    TO_SIGNED_TENTHS => [19, 20, 501, 502, 567, 740, 742, 747, 900, 903,
                          1109, 1110, 1111, 1112, 1113, 1114, 1124, 1125, 1134, 1135, 1136,
                          3325, 3326, 3327, 3330, 3522, 3903, 3905, 3906,
                          31_003, 31_007, 31_010, 31_013, 31_016, 31_019, 31_022],
+    # rubocop:enable Layout/MultilineArrayLineBreaks
     TO_LAST_LOCKOUT => [26],
     ->(v) { from_bitmask(v, SYSTEM_OUTPUTS) } => [27, 30],
     ->(v) { from_bitmask(v, SYSTEM_INPUTS) } => [28],
@@ -561,7 +563,8 @@ module Aurora
   REGISTER_FORMATS = {
     "%ds" => [1, 6, 9, 15, 84, 85, 110],
     "%dV" => [16, 112, 3331, 3424, 3523],
-    "%0.1f°F" => [19, 20, 401, 501, 502, 567, 740, 745, 746, 747, 900, 903,
+    # rubocop:disable Layout/MultilineArrayLineBreaks
+    "%0.1f°F" => [19, 20, 401, 501, 502, 567, 740, 742, 745, 746, 747, 900, 903,
                   1109, 1110, 1111, 1112, 1113, 1114, 1124, 1125, 1134, 1135, 1136,
                   3325, 3326, 3327, 3330, 3522, 3903, 3905, 3906,
                   12_619, 12_620,
@@ -573,6 +576,7 @@ module Aurora
                   21_248, 21_249,
                   31_003,
                   31_007, 31_010, 31_013, 31_016, 31_019, 31_022],
+    # rubocop:enable Layout/MultilineArrayLineBreaks
     "E%d" => [25, 26],
     "%d%%" => [282, 321, 322, 325, 346, 565, 741, 908, 1126, 3332, 3524, 3808],
     "%0.1f psi" => [419, 901, 1115, 1116, 1119, 3322, 3323],
@@ -803,6 +807,7 @@ module Aurora
     710 => "Fault Description",
     740 => "Entering Air",
     741 => "Relative Humidity",
+    742 => "Outdoor Temperature",
     745 => "Heating Set Point",
     746 => "Cooling Set Point",
     747 => "Ambient Temperature", # from communicating thermostat? but set to 0 when mode is off?
@@ -914,7 +919,7 @@ module Aurora
     12_623 => "Intermittent Fan Off Time (write)",
     21_114 => "IZ2 De/Humidifier Mode (write)",
     21_115 => "IZ2 De/Humidifier Setpoints (write)",
-    31_003 => "Outdoor Temp",
+    31_003 => "IZ2 Outdoor Temperature",
     31_005 => "IZ2 Demand",
     31_109 => "De/Humidifier Mode",
     31_110 => "Manual De/Humidification Setpoints",

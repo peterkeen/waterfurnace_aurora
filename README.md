@@ -43,7 +43,8 @@ amount of data may be inaccessible.
 
 Don't care for the nitty gritty details? Here's the easy path! You'll need a
 Raspberry Pi (tested on a Pi Zero W and a Pi 4), a
-[USB RS-485 adapter](https://www.amazon.com/gp/product/B07B416CPK),
+[USB RS-485 adapter](https://www.amazon.com/dp/B07B416CPK)
+([alternative](https://www.amazon.com/dp/B081MB6PN2)),
 and a network cable. Any adapter based on the MAX485 chip is _not_ supported.
 Additional details can be found in subsequent sections if
 you want to deviate slightly from the simple path.
@@ -84,9 +85,12 @@ sudo apt install ruby ruby-dev
 sudo gem install rake waterfurnace_aurora --no-doc
 sudo apt install mosquitto
 sudo curl https://github.com/ccutrer/waterfurnace_aurora/raw/main/contrib/aurora_mqtt_bridge.service -L -o /etc/systemd/system/aurora_mqtt_bridge.service
+sudo nano /etc/systemd/system/aurora_mqtt_bridge.service # edit the service user to match your user
 sudo systemctl enable aurora_mqtt_bridge
 sudo systemctl start aurora_mqtt_bridge
 ```
+
+Be sure to customize the `User=` line in the service file to match your username.
 
 Congratulations, you should now be seeing data published to MQTT! You can
 confirm this by using [MQTT Explorer](http://mqtt-explorer.com) and
@@ -277,12 +281,13 @@ homie/aurora-<serialno>/$modbus/340 <= Blower Only Speed (340): 3
 
 This gem supports using an RS-485 direct connection. It is possible to directly
 connect to the GPIO on a Raspberry Pi, or to use a USB RS-485 dongle such as
-[this one from Amazon](https://www.amazon.com/gp/product/B07B416CPK).
+[this one](https://www.amazon.com/dp/B07B416CPK) or
+[this one](https://www.amazon.com/dp/B081MB6PN2) from Amazon.
 Any adapter based on the MAX485 chip is _not_ supported.
 The key is identifying the correct wires as RS-485+ and RS-485-. It's easiest
 to take an existing ethernet cable, and cut off one end. Connect pins 1 and 3
 (white/orange and white/green for a TIA-568-B configured cable) to + and pins
-2 and 4 (orange and green) -. The other pins are C and R from the thermostat
+2 and 4 (orange and blue) -. The other pins are C and R from the thermostat
 bus, providing 24VAC power. DO NOT SHORT THESE PINS AGAINST ANYTHING, such
 as the communication pins, or a ground connection anywhere. Best case scenario
 you blow a 3A automotive fuse in your heat pump that you will need to replace.
@@ -341,7 +346,7 @@ $ web_aid_tool mqtt://mqtt-server/homie/aurora-123/$modbus
 If you need to eavesdrop over existing communication, it is possible to 
 mangle an ethernet cable such that it still has both ends, but you're connected
 in the middle. But I find it much easier to use an RJ45 breakout board such as
-[this one from Amazon](https://www.amazon.com/gp/product/B01GNOBDPM). You
+[this one from Amazon](https://www.amazon.com/dp/B01GNOBDPM). You
 connect a cable from the heat pump to the board, one from the board to your
 RS-485 dongle, and one from the board to the AWL or AID Tool. If you're
 simulating the ABC, you would omit the cable to the heat pump. But the AID Tool
